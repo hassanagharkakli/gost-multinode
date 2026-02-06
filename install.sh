@@ -548,6 +548,14 @@ main() {
     echo "    2. Configure the Iran relay node (option 2)"
     echo "    3. Configure foreign nodes (option 4)"
     echo
+
+    # Launch gost-manager automatically if running from a terminal
+    if [[ -t 0 ]] && command -v gost-manager >/dev/null 2>&1; then
+      echo
+      echo "[→] Launching gost-manager..."
+      sleep 1
+      exec gost-manager
+    fi
   else
     echo "[✖] Installation completed with $errors error(s)."
     echo
