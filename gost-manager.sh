@@ -93,11 +93,39 @@ get_current_menu() {
 }
 
 ###############################################################################
+# Menu helpers
+###############################################################################
+
+safe_clear() {
+  # Only clear if stdout is a terminal
+  if [[ -t 1 ]]; then
+    clear 2>/dev/null || true
+  else
+    echo
+  fi
+}
+
+safe_read() {
+  local prompt="$1"
+  local var_name="$2"
+  
+  # Only read if stdin is a terminal
+  if [[ -t 0 ]]; then
+    read -rp "$prompt" "$var_name"
+  else
+    echo "[!] Error: Interactive terminal required for gost-manager"
+    echo "[i] Please run: gost-manager"
+    exit 1
+  fi
+}
+
+###############################################################################
 # Menu screens
 ###############################################################################
 
 show_main_menu() {
-  clear
+  safe_clear
+  
   echo "╔════════════════════════════════════════════════════╗"
   echo "║   Gost MultiNode Manager (by HassanAgh)          ║"
   echo "╚════════════════════════════════════════════════════╝"
@@ -111,7 +139,9 @@ show_main_menu() {
   echo
   echo "  0) Exit"
   echo
-  read -rp "  Select an option: " choice
+  
+  local choice
+  safe_read "  Select an option: " choice
 
   case "$choice" in
     1) push_menu "main"; show_iran_menu ;;
@@ -133,7 +163,7 @@ show_main_menu() {
 }
 
 show_iran_menu() {
-  clear
+  safe_clear
   echo "╔════════════════════════════════════════════════════╗"
   echo "║   Iran Node Management                             ║"
   echo "╚════════════════════════════════════════════════════╝"
@@ -147,7 +177,9 @@ show_iran_menu() {
   echo
   echo "  0) Back to Main Menu"
   echo
-  read -rp "  Select an option: " choice
+  
+  local choice
+  safe_read "  Select an option: " choice
 
   case "$choice" in
     1) install_gost; show_iran_menu ;;
@@ -164,7 +196,7 @@ show_iran_menu() {
 }
 
 show_foreign_menu() {
-  clear
+  safe_clear
   echo "╔════════════════════════════════════════════════════╗"
   echo "║   Foreign Node Management                          ║"
   echo "╚════════════════════════════════════════════════════╝"
@@ -178,7 +210,9 @@ show_foreign_menu() {
   echo
   echo "  0) Back to Main Menu"
   echo
-  read -rp "  Select an option: " choice
+  
+  local choice
+  safe_read "  Select an option: " choice
 
   case "$choice" in
     1) add_foreign; show_foreign_menu ;;
@@ -195,7 +229,7 @@ show_foreign_menu() {
 }
 
 show_status_menu() {
-  clear
+  safe_clear
   echo "╔════════════════════════════════════════════════════╗"
   echo "║   Service Status & Monitoring                      ║"
   echo "╚════════════════════════════════════════════════════╝"
@@ -206,7 +240,9 @@ show_status_menu() {
   echo
   echo "  0) Back to Main Menu"
   echo
-  read -rp "  Press ENTER to refresh status, or 0 to go back: " choice
+  
+  local choice
+  safe_read "  Press ENTER to refresh status, or 0 to go back: " choice
   case "$choice" in
     0) pop_menu; show_main_menu ;;
     *) show_status_menu ;;
@@ -214,7 +250,7 @@ show_status_menu() {
 }
 
 show_maintenance_menu() {
-  clear
+  safe_clear
   echo "╔════════════════════════════════════════════════════╗"
   echo "║   System Maintenance                               ║"
   echo "╚════════════════════════════════════════════════════╝"
@@ -226,7 +262,9 @@ show_maintenance_menu() {
   echo
   echo "  0) Back to Main Menu"
   echo
-  read -rp "  Select an option: " choice
+  
+  local choice
+  safe_read "  Select an option: " choice
 
   case "$choice" in
     1) 
