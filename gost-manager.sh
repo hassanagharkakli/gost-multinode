@@ -14,12 +14,16 @@ GOSTMN_BASE="/opt/gost-multinode"
 ###############################################################################
 
 check_and_elevate() {
-  if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+  local current_uid
+  current_uid=$(id -u 2>/dev/null || echo "unknown")
+
+  if [[ ${EUID:-$current_uid} -eq 0 ]]; then
     return 0
   fi
 
   if command -v sudo >/dev/null 2>&1; then
-    echo "[→] Not running as root. Attempting to elevate privileges with sudo..."
+    echo "[→] Not running as root (UID: ${current_uid}). Attempting to elevate privileges with sudo..."
+    echo "[i] You may be prompted for your password."
     exec sudo "$0" "$@"
   else
     echo
@@ -28,10 +32,11 @@ check_and_elevate() {
     echo "╚════════════════════════════════════════════════════╝"
     echo
     echo "[!] This manager must be run with root privileges."
+    echo "[!] Current UID: ${current_uid}"
     echo
     echo "[i] Options:"
-    echo "    1. Run as root user: sudo $0"
-    echo "    2. Run with sudo: sudo bash $0"
+    echo "    1. Run with sudo: sudo gost-manager"
+    echo "    2. Run with sudo bash: sudo bash /opt/gost-multinode/gost-manager.sh"
     echo "    3. Switch to root: su -"
     echo
     exit 1

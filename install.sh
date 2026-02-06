@@ -102,12 +102,16 @@ download_file() {
 ###############################################################################
 
 check_and_elevate() {
-  if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+  local current_uid
+  current_uid=$(id -u 2>/dev/null || echo "unknown")
+
+  if [[ ${EUID:-$current_uid} -eq 0 ]]; then
     return 0
   fi
 
   if command -v sudo >/dev/null 2>&1; then
-    echo "[→] Not running as root. Attempting to elevate privileges with sudo..."
+    echo "[→] Not running as root (UID: ${current_uid}). Attempting to elevate privileges with sudo..."
+    echo "[i] You may be prompted for your password."
     exec sudo "$0" "$@"
   else
     echo
@@ -116,10 +120,11 @@ check_and_elevate() {
     echo "╚════════════════════════════════════════════════════╝"
     echo
     echo "[!] This installer must be run with root privileges."
+    echo "[!] Current UID: ${current_uid}"
     echo
     echo "[i] Options:"
-    echo "    1. Run as root user: sudo $0"
-    echo "    2. Run with sudo: sudo bash $0"
+    echo "    1. Run with sudo: sudo bash <(curl -fsSL ${REPO_RAW_BASE}/install.sh)"
+    echo "    2. Run as root user: su -c 'bash <(curl -fsSL ${REPO_RAW_BASE}/install.sh)'"
     echo "    3. Switch to root: su -"
     echo
     exit 1
@@ -187,13 +192,36 @@ install_dependencies() {
   echo "[i] This step installs required packages: curl, wget, nano, ca-certificates"
   echo
 
+  # Check what's already installed
+  local missing=()
+  command -v curl >/dev/null 2>&1 || missing+=("curl")
+  command -v wget >/dev/null 2>&1 || missing+=("wget")
+  command -v nano >/dev/null 2>&1 || missing+=("nano")
+  [[ -f /etc/ssl/certs/ca-certificates.crt ]] || missing+=("ca-certificates")
+
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "[✔] System dependencies - already installed"
+    return 0
+  fi
+
+  show_status "System dependencies" "installing"
   export DEBIAN_FRONTEND=noninteractive
   if apt-get update -y && apt-get install -y curl wget nano ca-certificates; then
-    echo
-    show_status "System dependencies" "success"
-    return 0
+    # Verify installation
+    local verify_failed=0
+    command -v curl >/dev/null 2>&1 || ((verify_failed++))
+    command -v wget >/dev/null 2>&1 || ((verify_failed++))
+    command -v nano >/dev/null 2>&1 || ((verify_failed++))
+    [[ -f /etc/ssl/certs/ca-certificates.crt ]] || ((verify_failed++))
+
+    if [[ $verify_failed -eq 0 ]]; then
+      show_status "System dependencies" "success"
+      return 0
+    else
+      show_status "System dependencies" "failed"
+      return 1
+    fi
   else
-    echo
     show_status "System dependencies" "failed"
     return 1
   fi
@@ -239,14 +267,30 @@ create_directories() {
   echo "[i] Setting up directories for configuration files and logs."
   echo
 
+  # Check if directories already exist
+  if [[ -d "${BASE_DIR}/lib" ]] && \
+     [[ -d "${BASE_DIR}/config" ]] && \
+     [[ -d "${BASE_DIR}/config/foreign" ]] && \
+     [[ -d "${BASE_DIR}/logs" ]]; then
+    echo "[✔] Directory structure - already exists"
+    # Ensure permissions are correct
+    chmod 700 "${BASE_DIR}" "${BASE_DIR}/config" "${BASE_DIR}/config/foreign" "${BASE_DIR}/logs" 2>/dev/null || true
+    return 0
+  fi
+
   show_status "Directory structure" "installing"
   if mkdir -p \
     "${BASE_DIR}/lib" \
     "${BASE_DIR}/config" \
     "${BASE_DIR}/config/foreign" \
     "${BASE_DIR}/logs"; then
+    # Set restrictive permissions
     chmod 700 "${BASE_DIR}" "${BASE_DIR}/config" "${BASE_DIR}/config/foreign" "${BASE_DIR}/logs" 2>/dev/null || true
-    if [[ -d "${BASE_DIR}/lib" ]] && [[ -d "${BASE_DIR}/config" ]] && [[ -d "${BASE_DIR}/logs" ]]; then
+    # Verify all directories exist
+    if [[ -d "${BASE_DIR}/lib" ]] && \
+       [[ -d "${BASE_DIR}/config" ]] && \
+       [[ -d "${BASE_DIR}/config/foreign" ]] && \
+       [[ -d "${BASE_DIR}/logs" ]]; then
       show_status "Directory structure" "success"
       return 0
     else
@@ -270,10 +314,26 @@ download_manager_files() {
 
   local failed=0
 
+  # Check if files already exist
+  if [[ -f "${BASE_DIR}/gost-manager.sh" ]] && \
+     [[ -f "${BASE_DIR}/lib/common.sh" ]] && \
+     [[ -f "${BASE_DIR}/lib/iran.sh" ]] && \
+     [[ -f "${BASE_DIR}/lib/foreign.sh" ]]; then
+    echo "[✔] Manager files - already exist"
+    # Ensure executable permission
+    chmod +x "${BASE_DIR}/gost-manager.sh" 2>/dev/null || true
+    return 0
+  fi
+
   show_status "gost-manager.sh" "installing"
   if download_file "gost-manager.sh" "${BASE_DIR}/gost-manager.sh"; then
     chmod +x "${BASE_DIR}/gost-manager.sh"
-    show_status "gost-manager.sh" "success"
+    if [[ -f "${BASE_DIR}/gost-manager.sh" ]] && [[ -x "${BASE_DIR}/gost-manager.sh" ]]; then
+      show_status "gost-manager.sh" "success"
+    else
+      show_status "gost-manager.sh" "failed"
+      ((failed++))
+    fi
   else
     show_status "gost-manager.sh" "failed"
     ((failed++))
@@ -281,7 +341,12 @@ download_manager_files() {
 
   show_status "lib/common.sh" "installing"
   if download_file "lib/common.sh" "${BASE_DIR}/lib/common.sh"; then
-    show_status "lib/common.sh" "success"
+    if verify_file "${BASE_DIR}/lib/common.sh"; then
+      show_status "lib/common.sh" "success"
+    else
+      show_status "lib/common.sh" "failed"
+      ((failed++))
+    fi
   else
     show_status "lib/common.sh" "failed"
     ((failed++))
@@ -289,7 +354,12 @@ download_manager_files() {
 
   show_status "lib/iran.sh" "installing"
   if download_file "lib/iran.sh" "${BASE_DIR}/lib/iran.sh"; then
-    show_status "lib/iran.sh" "success"
+    if verify_file "${BASE_DIR}/lib/iran.sh"; then
+      show_status "lib/iran.sh" "success"
+    else
+      show_status "lib/iran.sh" "failed"
+      ((failed++))
+    fi
   else
     show_status "lib/iran.sh" "failed"
     ((failed++))
@@ -297,7 +367,12 @@ download_manager_files() {
 
   show_status "lib/foreign.sh" "installing"
   if download_file "lib/foreign.sh" "${BASE_DIR}/lib/foreign.sh"; then
-    show_status "lib/foreign.sh" "success"
+    if verify_file "${BASE_DIR}/lib/foreign.sh"; then
+      show_status "lib/foreign.sh" "success"
+    else
+      show_status "lib/foreign.sh" "failed"
+      ((failed++))
+    fi
   else
     show_status "lib/foreign.sh" "failed"
     ((failed++))
@@ -321,12 +396,26 @@ install_systemd_services() {
   echo "[i] Installing systemd service units for automatic service management."
   echo
 
+  # Check if services already exist
+  if [[ -f /etc/systemd/system/gost-iran.service ]] && \
+     [[ -f /etc/systemd/system/gost-foreign@.service ]]; then
+    echo "[✔] Systemd service files - already exist"
+    # Reload daemon to ensure services are recognized
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    return 0
+  fi
+
   local failed=0
 
   show_status "gost-iran.service" "installing"
   if download_file "systemd/gost-iran.service" "/etc/systemd/system/gost-iran.service"; then
     chmod 644 /etc/systemd/system/gost-iran.service
-    show_status "gost-iran.service" "success"
+    if verify_file /etc/systemd/system/gost-iran.service; then
+      show_status "gost-iran.service" "success"
+    else
+      show_status "gost-iran.service" "failed"
+      ((failed++))
+    fi
   else
     show_status "gost-iran.service" "failed"
     ((failed++))
@@ -335,7 +424,12 @@ install_systemd_services() {
   show_status "gost-foreign@.service" "installing"
   if download_file "systemd/gost-foreign@.service" "/etc/systemd/system/gost-foreign@.service"; then
     chmod 644 /etc/systemd/system/gost-foreign@.service
-    show_status "gost-foreign@.service" "success"
+    if verify_file /etc/systemd/system/gost-foreign@.service; then
+      show_status "gost-foreign@.service" "success"
+    else
+      show_status "gost-foreign@.service" "failed"
+      ((failed++))
+    fi
   else
     show_status "gost-foreign@.service" "failed"
     ((failed++))
@@ -344,6 +438,9 @@ install_systemd_services() {
   if [[ $failed -eq 0 ]]; then
     show_status "systemd daemon-reload" "installing"
     if systemctl daemon-reload; then
+      # Verify services are recognized (non-blocking)
+      systemctl list-unit-files gost-iran.service >/dev/null 2>&1 || true
+      systemctl list-unit-files gost-foreign@.service >/dev/null 2>&1 || true
       show_status "systemd daemon-reload" "success"
       return 0
     else
@@ -366,8 +463,17 @@ create_symlink() {
   echo "[i] Creating symlink for easy access: gost-manager"
   echo
 
+  # Check if symlink already exists and is correct
+  if [[ -L /usr/bin/gost-manager ]] && \
+     [[ "$(readlink -f /usr/bin/gost-manager)" == "$(readlink -f "${BASE_DIR}/gost-manager.sh")" ]] && \
+     [[ -x /usr/bin/gost-manager ]]; then
+    echo "[✔] gost-manager symlink - already exists and is correct"
+    return 0
+  fi
+
   show_status "gost-manager symlink" "installing"
   if ln -sf "${BASE_DIR}/gost-manager.sh" /usr/bin/gost-manager; then
+    sleep 0.5
     if [[ -L /usr/bin/gost-manager ]] && [[ -x /usr/bin/gost-manager ]]; then
       show_status "gost-manager symlink" "success"
       return 0
