@@ -30,11 +30,33 @@ fi
 mkdir -p "${BASE_DIR}/lib" "${BASE_DIR}/config/foreign" "${BASE_DIR}/logs" "${BASE_DIR}/systemd"
 
 echo "[+] Installing gost-multinode manager files..."
-cp gost-manager.sh "${BASE_DIR}/"
-cp lib/*.sh "${BASE_DIR}/lib/"
-cp systemd/*.service "${BASE_DIR}/systemd/"
+
+# GitHub repository base URL for raw content
+REPO_URL="https://raw.githubusercontent.com/hassanagharkakli/gost-multinode/main"
+
+# Download main manager script
+echo "[+] Downloading gost-manager.sh..."
+curl -fsSL "${REPO_URL}/gost-manager.sh" -o "${BASE_DIR}/gost-manager.sh"
+
+# Download library scripts
+echo "[+] Downloading library scripts..."
+curl -fsSL "${REPO_URL}/lib/common.sh" -o "${BASE_DIR}/lib/common.sh"
+curl -fsSL "${REPO_URL}/lib/iran.sh" -o "${BASE_DIR}/lib/iran.sh"
+curl -fsSL "${REPO_URL}/lib/foreign.sh" -o "${BASE_DIR}/lib/foreign.sh"
+
+# Download systemd service files
+echo "[+] Downloading systemd service files..."
+curl -fsSL "${REPO_URL}/systemd/gost-iran.service" -o "${BASE_DIR}/systemd/gost-iran.service"
+curl -fsSL "${REPO_URL}/systemd/gost-foreign@.service" -o "${BASE_DIR}/systemd/gost-foreign@.service"
+
+# Install systemd service files to system directory
+echo "[+] Installing systemd service files..."
+cp "${BASE_DIR}/systemd/gost-iran.service" /etc/systemd/system/
+cp "${BASE_DIR}/systemd/gost-foreign@.service" /etc/systemd/system/
+systemctl daemon-reload
 
 chmod +x "${BASE_DIR}/gost-manager.sh"
+chmod 644 /etc/systemd/system/gost-iran.service /etc/systemd/system/gost-foreign@.service
 chmod 700 "${BASE_DIR}/config" "${BASE_DIR}/config/foreign" "${BASE_DIR}/logs" 2>/dev/null || true
 
 ln -sf "${BASE_DIR}/gost-manager.sh" /usr/bin/gost-manager
