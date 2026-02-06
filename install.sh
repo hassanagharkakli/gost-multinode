@@ -550,15 +550,26 @@ main() {
     echo
 
     # Launch gost-manager automatically after successful installation
-    if command -v gost-manager >/dev/null 2>&1; then
-      echo
-      echo "[→] Launching gost-manager..."
-      sleep 1
-      exec gost-manager
+    echo
+    echo "[→] Launching gost-manager..."
+    sleep 1
+    
+    # Refresh command hash to ensure symlink is recognized
+    hash -r 2>/dev/null || true
+    
+    # Try to launch using symlink first, then fallback to direct script path
+    if [[ -L /usr/bin/gost-manager ]] && [[ -x /usr/bin/gost-manager ]]; then
+      exec /usr/bin/gost-manager "$@"
+    elif [[ -f "${BASE_DIR}/gost-manager.sh" ]] && [[ -x "${BASE_DIR}/gost-manager.sh" ]]; then
+      exec "${BASE_DIR}/gost-manager.sh" "$@"
     else
+      echo "[!] Error: gost-manager not found or not executable"
+      echo "[i] Expected locations:"
+      echo "    - /usr/bin/gost-manager"
+      echo "    - ${BASE_DIR}/gost-manager.sh"
       echo
-      echo "[!] Warning: gost-manager command not found in PATH"
-      echo "[i] You can run it manually: /opt/gost-multinode/gost-manager.sh"
+      echo "[i] You can run it manually: gost-manager"
+      exit 0
     fi
   else
     echo "[✖] Installation completed with $errors error(s)."
