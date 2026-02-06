@@ -8,7 +8,7 @@
 set -euo pipefail
 
 BASE_DIR="/opt/gost-multinode"
-REPO_URL="https://raw.githubusercontent.com/hassanagharkakli/gost-multinode/main"
+readonly REPO_URL="https://raw.githubusercontent.com/hassanagharkakli/gost-multinode/main"
 
 ###############################################################################
 # Privilege handling: auto-elevate with sudo if needed
@@ -124,7 +124,7 @@ install_gost_binary() {
   echo
 
   if verify_command "gost"; then
-    show_status "Gost binary" "check"
+    echo "[✔] Gost binary - already installed"
     echo "[i] Gost is already installed. Skipping binary installation."
     return 0
   fi
@@ -186,7 +186,8 @@ download_manager_files() {
   local failed=0
 
   show_status "gost-manager.sh" "installing"
-  if curl -fsSL "${REPO_URL}/gost-manager.sh" -o "${BASE_DIR}/gost-manager.sh"; then
+  local url="${REPO_URL}/gost-manager.sh"
+  if curl -fsSL "$url" -o "${BASE_DIR}/gost-manager.sh"; then
     if verify_file "${BASE_DIR}/gost-manager.sh"; then
       chmod +x "${BASE_DIR}/gost-manager.sh"
       show_status "gost-manager.sh" "success"
@@ -200,7 +201,8 @@ download_manager_files() {
   fi
 
   show_status "lib/common.sh" "installing"
-  if curl -fsSL "${REPO_URL}/lib/common.sh" -o "${BASE_DIR}/lib/common.sh"; then
+  local url="${REPO_URL}/lib/common.sh"
+  if curl -fsSL "$url" -o "${BASE_DIR}/lib/common.sh"; then
     if verify_file "${BASE_DIR}/lib/common.sh"; then
       show_status "lib/common.sh" "success"
     else
@@ -213,7 +215,8 @@ download_manager_files() {
   fi
 
   show_status "lib/iran.sh" "installing"
-  if curl -fsSL "${REPO_URL}/lib/iran.sh" -o "${BASE_DIR}/lib/iran.sh"; then
+  local url="${REPO_URL}/lib/iran.sh"
+  if curl -fsSL "$url" -o "${BASE_DIR}/lib/iran.sh"; then
     if verify_file "${BASE_DIR}/lib/iran.sh"; then
       show_status "lib/iran.sh" "success"
     else
@@ -226,7 +229,8 @@ download_manager_files() {
   fi
 
   show_status "lib/foreign.sh" "installing"
-  if curl -fsSL "${REPO_URL}/lib/foreign.sh" -o "${BASE_DIR}/lib/foreign.sh"; then
+  local url="${REPO_URL}/lib/foreign.sh"
+  if curl -fsSL "$url" -o "${BASE_DIR}/lib/foreign.sh"; then
     if verify_file "${BASE_DIR}/lib/foreign.sh"; then
       show_status "lib/foreign.sh" "success"
     else
@@ -257,7 +261,8 @@ install_systemd_services() {
   local failed=0
 
   show_status "gost-iran.service" "installing"
-  if curl -fsSL "${REPO_URL}/systemd/gost-iran.service" -o /etc/systemd/system/gost-iran.service; then
+  local url="${REPO_URL}/systemd/gost-iran.service"
+  if curl -fsSL "$url" -o /etc/systemd/system/gost-iran.service; then
     if verify_file /etc/systemd/system/gost-iran.service; then
       chmod 644 /etc/systemd/system/gost-iran.service
       show_status "gost-iran.service" "success"
@@ -271,7 +276,8 @@ install_systemd_services() {
   fi
 
   show_status "gost-foreign@.service" "installing"
-  if curl -fsSL "${REPO_URL}/systemd/gost-foreign@.service" -o /etc/systemd/system/gost-foreign@.service; then
+  local url="${REPO_URL}/systemd/gost-foreign@.service"
+  if curl -fsSL "$url" -o /etc/systemd/system/gost-foreign@.service; then
     if verify_file /etc/systemd/system/gost-foreign@.service; then
       chmod 644 /etc/systemd/system/gost-foreign@.service
       show_status "gost-foreign@.service" "success"
