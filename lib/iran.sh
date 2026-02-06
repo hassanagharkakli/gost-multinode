@@ -50,9 +50,14 @@ setup_iran() {
 
   echo
   echo "Optional: IP allowlist for incoming SSH connections to the relay."
-  echo "You can enter a comma-separated list of IPs or CIDR ranges (for example: 1.2.3.4,10.0.0.0/8)."
-  echo "Leave empty to allow all IPs (recommended only behind a firewall)."
-  read -rp "IP/CIDR allowlist (optional): " allowlist
+  echo
+  echo "[i] This allowlist restricts which IPs can connect to the Iran relay."
+  echo "[i] Enter the IP addresses of your FOREIGN nodes (not the Iran node IP)."
+  echo "[i] Example: 1.2.3.4,5.6.7.8 or 10.0.0.0/8"
+  echo
+  echo "[i] Leave empty to allow all IPs (recommended only behind a firewall)."
+  echo "[i] Note: You can also use firewall rules (iptables/ufw) instead of this allowlist."
+  read -rp "Foreign node IPs/CIDR allowlist (optional, leave empty for all): " allowlist
 
   {
     echo "PORT=${port}"
