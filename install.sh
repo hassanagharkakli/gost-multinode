@@ -549,12 +549,16 @@ main() {
     echo "    3. Configure foreign nodes (option 4)"
     echo
 
-    # Launch gost-manager automatically if running from a terminal
-    if [[ -t 0 ]] && command -v gost-manager >/dev/null 2>&1; then
+    # Launch gost-manager automatically after successful installation
+    if command -v gost-manager >/dev/null 2>&1; then
       echo
       echo "[→] Launching gost-manager..."
       sleep 1
       exec gost-manager
+    else
+      echo
+      echo "[!] Warning: gost-manager command not found in PATH"
+      echo "[i] You can run it manually: /opt/gost-multinode/gost-manager.sh"
     fi
   else
     echo "[✖] Installation completed with $errors error(s)."
