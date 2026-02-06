@@ -1,0 +1,10 @@
+[Unit]
+Description=Gost Iran Relay
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/gost -L relay+ssh://$(cat /opt/gost-multinode/config/iran.conf | grep USER | cut -d= -f2):$(cat /opt/gost-multinode/config/iran.conf | grep PASS | cut -d= -f2)@:${PORT}?bind=true
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

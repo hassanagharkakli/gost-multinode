@@ -1,0 +1,18 @@
+[Unit]
+Description=Gost Foreign Node %i
+After=network.target
+
+[Service]
+ExecStart=/bin/bash -c '\
+CFG=/opt/gost-multinode/config/foreign/%i.conf; \
+CMD="gost"; \
+for m in $(grep MAP $CFG | cut -d= -f2); do \
+  CMD="$CMD -L rtcp://:${m%%:*}/:${m##*:}"; \
+done; \
+source $CFG; \
+CMD="$CMD -F relay+ssh://$USER:$PASS@$IRAN:$PORT"; \
+exec $CMD'
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
