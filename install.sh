@@ -7,8 +7,95 @@
 
 set -euo pipefail
 
-BASE_DIR="/opt/gost-multinode"
-readonly REPO_URL="https://raw.githubusercontent.com/hassanagharkakli/gost-multinode/main"
+###############################################################################
+# Configuration: Single source of truth
+###############################################################################
+
+readonly BASE_DIR="/opt/gost-multinode"
+readonly REPO_RAW_BASE="https://raw.githubusercontent.com/hassanagharkakli/gost-multinode/main"
+
+###############################################################################
+# Validation: Ensure REPO_RAW_BASE is set and valid
+###############################################################################
+
+validate_repo_base() {
+  if [[ -z "${REPO_RAW_BASE:-}" ]]; then
+    echo
+    echo "╔════════════════════════════════════════════════════╗"
+    echo "║   FATAL ERROR: Repository URL not configured       ║"
+    echo "╚════════════════════════════════════════════════════╝"
+    echo
+    echo "[!] REPO_RAW_BASE is empty or unset."
+    echo "[!] This is a critical configuration error."
+    echo
+    exit 1
+  fi
+
+  if [[ ! "${REPO_RAW_BASE}" =~ ^https:// ]]; then
+    echo
+    echo "╔════════════════════════════════════════════════════╗"
+    echo "║   FATAL ERROR: Invalid repository URL              ║"
+    echo "╚════════════════════════════════════════════════════╝"
+    echo
+    echo "[!] REPO_RAW_BASE must be a valid HTTPS URL."
+    echo "[!] Current value: ${REPO_RAW_BASE}"
+    echo
+    exit 1
+  fi
+}
+
+###############################################################################
+# Safe download helper: Single function for all downloads
+###############################################################################
+
+download_file() {
+  local remote_path="$1"
+  local destination="$2"
+
+  if [[ -z "$remote_path" ]] || [[ -z "$destination" ]]; then
+    echo "[!] download_file: Both remote_path and destination must be provided." >&2
+    return 1
+  fi
+
+  # Construct full URL using REPO_RAW_BASE
+  local full_url="${REPO_RAW_BASE}/${remote_path}"
+
+  # Validate URL is non-empty
+  if [[ -z "$full_url" ]]; then
+    echo "[!] download_file: Constructed URL is empty." >&2
+    return 1
+  fi
+
+  # Validate URL format
+  if [[ ! "$full_url" =~ ^https:// ]]; then
+    echo "[!] download_file: Invalid URL format: ${full_url}" >&2
+    return 1
+  fi
+
+  # Create destination directory if needed
+  local dest_dir
+  dest_dir=$(dirname "$destination")
+  if [[ ! -d "$dest_dir" ]]; then
+    mkdir -p "$dest_dir" || {
+      echo "[!] download_file: Failed to create directory: ${dest_dir}" >&2
+      return 1
+    }
+  fi
+
+  # Download with curl
+  if ! curl -fsSL "$full_url" -o "$destination"; then
+    echo "[!] download_file: curl failed for URL: ${full_url}" >&2
+    return 1
+  fi
+
+  # Verify file was created and is non-empty
+  if [[ ! -f "$destination" ]] || [[ ! -s "$destination" ]]; then
+    echo "[!] download_file: Downloaded file is missing or empty: ${destination}" >&2
+    return 1
+  fi
+
+  return 0
+}
 
 ###############################################################################
 # Privilege handling: auto-elevate with sudo if needed
@@ -38,8 +125,6 @@ check_and_elevate() {
     exit 1
   fi
 }
-
-check_and_elevate "$@"
 
 ###############################################################################
 # Status display helpers
@@ -186,57 +271,33 @@ download_manager_files() {
   local failed=0
 
   show_status "gost-manager.sh" "installing"
-  local url="${REPO_URL}/gost-manager.sh"
-  if curl -fsSL "$url" -o "${BASE_DIR}/gost-manager.sh"; then
-    if verify_file "${BASE_DIR}/gost-manager.sh"; then
-      chmod +x "${BASE_DIR}/gost-manager.sh"
-      show_status "gost-manager.sh" "success"
-    else
-      show_status "gost-manager.sh" "failed"
-      ((failed++))
-    fi
+  if download_file "gost-manager.sh" "${BASE_DIR}/gost-manager.sh"; then
+    chmod +x "${BASE_DIR}/gost-manager.sh"
+    show_status "gost-manager.sh" "success"
   else
     show_status "gost-manager.sh" "failed"
     ((failed++))
   fi
 
   show_status "lib/common.sh" "installing"
-  local url="${REPO_URL}/lib/common.sh"
-  if curl -fsSL "$url" -o "${BASE_DIR}/lib/common.sh"; then
-    if verify_file "${BASE_DIR}/lib/common.sh"; then
-      show_status "lib/common.sh" "success"
-    else
-      show_status "lib/common.sh" "failed"
-      ((failed++))
-    fi
+  if download_file "lib/common.sh" "${BASE_DIR}/lib/common.sh"; then
+    show_status "lib/common.sh" "success"
   else
     show_status "lib/common.sh" "failed"
     ((failed++))
   fi
 
   show_status "lib/iran.sh" "installing"
-  local url="${REPO_URL}/lib/iran.sh"
-  if curl -fsSL "$url" -o "${BASE_DIR}/lib/iran.sh"; then
-    if verify_file "${BASE_DIR}/lib/iran.sh"; then
-      show_status "lib/iran.sh" "success"
-    else
-      show_status "lib/iran.sh" "failed"
-      ((failed++))
-    fi
+  if download_file "lib/iran.sh" "${BASE_DIR}/lib/iran.sh"; then
+    show_status "lib/iran.sh" "success"
   else
     show_status "lib/iran.sh" "failed"
     ((failed++))
   fi
 
   show_status "lib/foreign.sh" "installing"
-  local url="${REPO_URL}/lib/foreign.sh"
-  if curl -fsSL "$url" -o "${BASE_DIR}/lib/foreign.sh"; then
-    if verify_file "${BASE_DIR}/lib/foreign.sh"; then
-      show_status "lib/foreign.sh" "success"
-    else
-      show_status "lib/foreign.sh" "failed"
-      ((failed++))
-    fi
+  if download_file "lib/foreign.sh" "${BASE_DIR}/lib/foreign.sh"; then
+    show_status "lib/foreign.sh" "success"
   else
     show_status "lib/foreign.sh" "failed"
     ((failed++))
@@ -245,6 +306,8 @@ download_manager_files() {
   if [[ $failed -eq 0 ]]; then
     return 0
   else
+    echo
+    echo "[!] Failed to download ${failed} file(s). Aborting installation."
     return 1
   fi
 }
@@ -261,30 +324,18 @@ install_systemd_services() {
   local failed=0
 
   show_status "gost-iran.service" "installing"
-  local url="${REPO_URL}/systemd/gost-iran.service"
-  if curl -fsSL "$url" -o /etc/systemd/system/gost-iran.service; then
-    if verify_file /etc/systemd/system/gost-iran.service; then
-      chmod 644 /etc/systemd/system/gost-iran.service
-      show_status "gost-iran.service" "success"
-    else
-      show_status "gost-iran.service" "failed"
-      ((failed++))
-    fi
+  if download_file "systemd/gost-iran.service" "/etc/systemd/system/gost-iran.service"; then
+    chmod 644 /etc/systemd/system/gost-iran.service
+    show_status "gost-iran.service" "success"
   else
     show_status "gost-iran.service" "failed"
     ((failed++))
   fi
 
   show_status "gost-foreign@.service" "installing"
-  local url="${REPO_URL}/systemd/gost-foreign@.service"
-  if curl -fsSL "$url" -o /etc/systemd/system/gost-foreign@.service; then
-    if verify_file /etc/systemd/system/gost-foreign@.service; then
-      chmod 644 /etc/systemd/system/gost-foreign@.service
-      show_status "gost-foreign@.service" "success"
-    else
-      show_status "gost-foreign@.service" "failed"
-      ((failed++))
-    fi
+  if download_file "systemd/gost-foreign@.service" "/etc/systemd/system/gost-foreign@.service"; then
+    chmod 644 /etc/systemd/system/gost-foreign@.service
+    show_status "gost-foreign@.service" "success"
   else
     show_status "gost-foreign@.service" "failed"
     ((failed++))
@@ -300,6 +351,8 @@ install_systemd_services() {
       return 1
     fi
   else
+    echo
+    echo "[!] Failed to install ${failed} service file(s). Aborting installation."
     return 1
   fi
 }
@@ -333,6 +386,12 @@ create_symlink() {
 ###############################################################################
 
 main() {
+  # Validate repository base URL before anything else
+  validate_repo_base
+
+  # Check and elevate privileges
+  check_and_elevate "$@"
+
   clear
   echo "╔════════════════════════════════════════════════════╗"
   echo "║   Gost MultiNode Installer (by HassanAgh)         ║"
