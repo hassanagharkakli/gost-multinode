@@ -1,18 +1,51 @@
-[Unit]
-Description=Gost Foreign Node %i
-After=network.target
+ [Unit]
+ Description=Gost MultiNode - Foreign node instance %i
+ Documentation=https://github.com/hassanagharkakli/gost-multinode
+ After=network-online.target
+ Wants=network-online.target
 
-[Service]
-ExecStart=/bin/bash -c '\
-CFG=/opt/gost-multinode/config/foreign/%i.conf; \
-CMD="gost"; \
-for m in $(grep MAP $CFG | cut -d= -f2); do \
-  CMD="$CMD -L rtcp://:${m%%:*}/:${m##*:}"; \
-done; \
-source $CFG; \
-CMD="$CMD -F relay+ssh://$USER:$PASS@$IRAN:$PORT"; \
-exec $CMD'
-Restart=always
+ [Service]
+ Type=simple
+ ExecStart=/bin/bash -c '\
+   set -euo pipefail; \
+   CFG=\"/opt/gost-multinode/config/foreign/%i.conf\"; \
+   if [[ ! -f \"${CFG}\" ]]; then \
+     echo \"[gost-foreign@%i] Config file not found: ${CFG}\" >&2; \
+     exit 1; \
+   fi; \
+   source \"${CFG}\"; \
+   if [[ -z \"${IRAN:-}\" || -z \"${PORT:-}\" || -z \"${USER:-}\" ]]; then \
+     echo \"[gost-foreign@%i] Invalid configuration (missing IRAN/PORT/USER).\" >&2; \
+     exit 1; \
+   fi; \
+   CMD=\"gost\"; \
+   while IFS='=' read -r key value; do \
+     if [[ \"${key}\" == \"MAP\" ]]; then \
+       l_port=\"${value%%:*}\"; \
+       r_port=\"${value##*:}\"; \
+       CMD=\"${CMD} -L rtcp://:${l_port}/:${r_port}\"; \
+     fi; \
+   done < <(grep '^MAP=' \"${CFG}\" || true); \
+   if [[ \"${AUTH_MODE:-password}\" == \"key\" ]]; then \
+     if [[ -z \"${KEY_FILE:-}\" ]]; then \
+       echo \"[gost-foreign@%i] AUTH_MODE=key but KEY_FILE is not set.\" >&2; \
+       exit 1; \
+     fi; \
+     CMD=\"${CMD} -F relay+ssh://${USER}@${IRAN}:${PORT}?privateKey=${KEY_FILE}\"; \
+   else \
+     if [[ -z \"${PASS:-}\" ]]; then \
+       echo \"[gost-foreign@%i] Password authentication selected but PASS is empty.\" >&2; \
+       exit 1; \
+     fi; \
+     CMD=\"${CMD} -F relay+ssh://${USER}:${PASS}@${IRAN}:${PORT}\"; \
+   fi; \
+   exec ${CMD}'
+ Restart=on-failure
+ RestartSec=3
 
-[Install]
-WantedBy=multi-user.target
+ # Basic hardening (may be adjusted by the administrator)
+ NoNewPrivileges=yes
+ LimitNOFILE=65535
+
+ [Install]
+ WantedBy=multi-user.target

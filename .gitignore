@@ -1,0 +1,16 @@
+# Runtime and environment
+.DS_Store
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Runtime configuration (do not track secrets)
+config/iran.conf
+config/foreign/
+
+# Systemd runtime artifacts (if copied locally)
+*.service~
+

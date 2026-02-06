@@ -1,10 +1,44 @@
-[Unit]
-Description=Gost Iran Relay
-After=network.target
+ [Unit]
+ Description=Gost MultiNode - Iran relay node
+ Documentation=https://github.com/hassanagharkakli/gost-multinode
+ After=network-online.target
+ Wants=network-online.target
 
-[Service]
-ExecStart=/usr/bin/gost -L relay+ssh://$(cat /opt/gost-multinode/config/iran.conf | grep USER | cut -d= -f2):$(cat /opt/gost-multinode/config/iran.conf | grep PASS | cut -d= -f2)@:${PORT}?bind=true
-Restart=always
+ [Service]
+ Type=simple
+ ExecStart=/bin/bash -c '\
+   set -euo pipefail; \
+   CFG=\"/opt/gost-multinode/config/iran.conf\"; \
+   if [[ ! -f \"${CFG}\" ]]; then \
+     echo \"[gost-iran] Config file not found: ${CFG}\" >&2; \
+     exit 1; \
+   fi; \
+   source \"${CFG}\"; \
+   if [[ -z \"${PORT:-}\" || -z \"${USER:-}\" ]]; then \
+     echo \"[gost-iran] Invalid configuration (missing PORT/USER).\" >&2; \
+     exit 1; \
+   fi; \
+   CMD=\"/usr/bin/gost\"; \
+   if [[ \"${AUTH_MODE:-password}\" == \"key\" ]]; then \
+     if [[ -z \"${KEY_FILE:-}\" ]]; then \
+       echo \"[gost-iran] AUTH_MODE=key but KEY_FILE is not set.\" >&2; \
+       exit 1; \
+     fi; \
+     CMD=\"${CMD} -L relay+ssh://${USER}@:${PORT}?bind=true&privateKey=${KEY_FILE}\"; \
+   else \
+     if [[ -z \"${PASS:-}\" ]]; then \
+       echo \"[gost-iran] Password authentication selected but PASS is empty.\" >&2; \
+       exit 1; \
+     fi; \
+     CMD=\"${CMD} -L relay+ssh://${USER}:${PASS}@:${PORT}?bind=true\"; \
+   fi; \
+   exec ${CMD}'
+ Restart=on-failure
+ RestartSec=3
 
-[Install]
-WantedBy=multi-user.target
+ # Basic hardening (may be adjusted by the administrator)
+ NoNewPrivileges=yes
+ LimitNOFILE=65535
+
+ [Install]
+ WantedBy=multi-user.target
