@@ -109,9 +109,20 @@ safe_read() {
   local prompt="$1"
   local var_name="$2"
   
-  # Only read if stdin is a terminal
-  if [[ -t 0 ]]; then
-    read -rp "$prompt" "$var_name"
+  # If stdout is a terminal, always read from /dev/tty to ensure we get user input
+  # This handles cases where installer exec's gost-manager and stdin is from pipe
+  if [[ -t 1 ]] && [[ -r /dev/tty ]]; then
+    read -rp "$prompt" "$var_name" < /dev/tty || {
+      echo "[!] Error: Cannot read from terminal"
+      echo "[i] Please run: gost-manager"
+      exit 1
+    }
+  elif [[ -t 0 ]]; then
+    # If stdout is not a terminal but stdin is, read from stdin
+    read -rp "$prompt" "$var_name" || {
+      echo "[!] Error: Cannot read input"
+      exit 1
+    }
   else
     echo "[!] Error: Interactive terminal required for gost-manager"
     echo "[i] Please run: gost-manager"
