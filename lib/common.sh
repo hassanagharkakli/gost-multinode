@@ -22,19 +22,47 @@ pause() {
 require_root() {
   if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
     echo "[!] This command must be run as root." >&2
-    exit 1
+    return 1
   fi
 }
 
 install_gost() {
   echo
-  echo "=========================================="
-  echo "  Installing / Updating Gost Binary"
-  echo "=========================================="
+  echo "╔════════════════════════════════════════════════════╗"
+  echo "║   Install / Update Gost Binary                    ║"
+  echo "╚════════════════════════════════════════════════════╝"
   echo
-  bash <(curl -fsSL https://github.com/go-gost/gost/raw/master/install.sh) --install
+  echo "[i] Gost is the core relay software required for this setup."
   echo
-  echo "[+] Gost installation completed."
+
+  if command -v gost >/dev/null 2>&1; then
+    echo "[✔] Gost binary is already installed."
+    echo "[i] Current version: $(gost -V 2>&1 | head -n1 || echo 'unknown')"
+    echo
+    read -rp "Do you want to update Gost? [y/N]: " update_choice
+    if [[ ! "$update_choice" =~ ^[Yy]$ ]]; then
+      echo "[i] Update cancelled."
+      pause
+      return 0
+    fi
+  fi
+
+  echo "[→] Installing / updating Gost binary..."
+  echo
+  if bash <(curl -fsSL https://github.com/go-gost/gost/raw/master/install.sh) --install; then
+    sleep 1
+    if command -v gost >/dev/null 2>&1; then
+      echo
+      echo "[✔] Gost installation completed successfully!"
+      echo "[i] Installed version: $(gost -V 2>&1 | head -n1 || echo 'unknown')"
+    else
+      echo
+      echo "[✖] Gost installation may have failed. Please verify manually."
+    fi
+  else
+    echo
+    echo "[✖] Gost installation failed. Please check your internet connection and try again."
+  fi
   pause
 }
 
@@ -66,24 +94,32 @@ validate_ip_or_host() {
 
 status() {
   echo
-  echo "=========================================="
-  echo "  Service Status Overview"
-  echo "=========================================="
+  echo "╔════════════════════════════════════════════════════╗"
+  echo "║   Service Status Overview                          ║"
+  echo "╚════════════════════════════════════════════════════╝"
   echo
   echo "--- Iran Node Status ---"
   if systemctl is-active --quiet gost-iran.service 2>/dev/null; then
-    systemctl status gost-iran.service --no-pager -l || true
+    echo "[✔] gost-iran.service is active"
+    echo
+    systemctl status gost-iran.service --no-pager -l --lines=10 || true
+  elif systemctl is-enabled --quiet gost-iran.service 2>/dev/null; then
+    echo "[✖] gost-iran.service is enabled but not running"
+    echo "[i] Check logs: journalctl -u gost-iran.service -n 20"
   else
-    echo "[!] gost-iran.service is not active."
+    echo "[✖] gost-iran.service is not configured or not enabled"
   fi
   echo
   echo "--- Foreign Nodes Status ---"
   local count
   count=$(systemctl list-units 'gost-foreign@*.service' --no-pager --no-legend 2>/dev/null | wc -l)
   if [[ $count -gt 0 ]]; then
+    echo "[i] Found ${count} foreign node service(s):"
+    echo
     systemctl list-units 'gost-foreign@*.service' --no-pager || true
   else
     echo "[i] No foreign node services are currently active."
+    echo "[i] Configure foreign nodes from the Foreign Node Management menu."
   fi
   echo
   pause
@@ -95,21 +131,24 @@ ensure_directories() {
 }
 
 uninstall_gost_multinode() {
-  require_root
+  if ! require_root; then
+    return 1
+  fi
 
   echo
-  echo "=========================================="
-  echo "  Uninstall gost-multinode"
-  echo "=========================================="
+  echo "╔════════════════════════════════════════════════════╗"
+  echo "║   Uninstall gost-multinode                         ║"
+  echo "╚════════════════════════════════════════════════════╝"
   echo
-  echo "WARNING: This will:"
-  echo "  - Stop and disable all gost-multinode services"
-  echo "  - Remove /opt/gost-multinode directory"
-  echo "  - Remove /usr/bin/gost-manager symlink"
+  echo "WARNING: This operation will permanently remove:"
+  echo "  - All gost-multinode services (stopped and disabled)"
+  echo "  - Configuration files in /opt/gost-multinode"
+  echo "  - Manager script and libraries"
+  echo "  - Command symlink (/usr/bin/gost-manager)"
   echo
   echo "Note: The Gost binary itself will NOT be removed."
   echo
-  read -rp "Are you sure you want to continue? [y/N]: " confirm
+  read -rp "Are you absolutely sure you want to continue? [y/N]: " confirm
   if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
     echo
     echo "[i] Uninstall cancelled."
@@ -118,20 +157,28 @@ uninstall_gost_multinode() {
   fi
 
   echo
-  echo "[+] Stopping services..."
+  echo "[→] Stopping services..."
   systemctl stop gost-iran.service 2>/dev/null || true
   systemctl stop 'gost-foreign@*.service' 2>/dev/null || true
+  sleep 1
 
-  echo "[+] Disabling services..."
+  echo "[→] Disabling services..."
   systemctl disable gost-iran.service 2>/dev/null || true
   systemctl disable 'gost-foreign@*.service' 2>/dev/null || true
 
-  echo "[+] Removing files..."
+  echo "[→] Removing files..."
   rm -f /usr/bin/gost-manager
   rm -rf "${GOSTMN_BASE_DIR}"
 
-  echo
-  echo "[+] gost-multinode has been successfully removed."
+  # Verify removal
+  if [[ ! -d "${GOSTMN_BASE_DIR}" ]] && [[ ! -L /usr/bin/gost-manager ]]; then
+    echo
+    echo "[✔] gost-multinode has been successfully removed."
+  else
+    echo
+    echo "[✖] Some files may not have been removed completely."
+    echo "[i] Please check manually: ${GOSTMN_BASE_DIR}"
+  fi
   pause
 }
 
