@@ -106,13 +106,17 @@ check_and_elevate() {
   current_uid=$(id -u 2>/dev/null || echo "unknown")
 
   if [[ ${EUID:-$current_uid} -eq 0 ]]; then
+    # Mark that we're running as root (for non-interactive mode)
+    export GOSTMN_INSTALLER_RUNNING_AS_ROOT=1
     return 0
   fi
 
   if command -v sudo >/dev/null 2>&1; then
     echo "[→] Not running as root (UID: ${current_uid}). Attempting to elevate privileges with sudo..."
     echo "[i] You may be prompted for your password."
-    exec sudo "$0" "$@"
+    # Pass environment variable to indicate non-interactive mode
+    export GOSTMN_INSTALLER_RUNNING_AS_ROOT=1
+    exec sudo -E "$0" "$@"
   else
     echo
     echo "╔════════════════════════════════════════════════════╗"
@@ -506,7 +510,20 @@ main() {
   echo "[i] This installer will set up gost-multinode on your system."
   echo "[i] The installation process consists of 6 steps."
   echo
-  read -rp "Press ENTER to begin installation, or Ctrl+C to cancel... " _
+
+  # Only wait for user input if running interactively from a terminal
+  # If running from pipe (curl | bash) or already elevated via sudo, start automatically
+  if [[ -t 0 ]] && [[ -z "${GOSTMN_INSTALLER_RUNNING_AS_ROOT:-}" ]]; then
+    # Interactive mode: wait for user confirmation
+    read -rp "Press ENTER to begin installation, or Ctrl+C to cancel... " _
+  else
+    # Non-interactive mode: start automatically
+    # This happens when:
+    # 1. Running from pipe (curl | bash) - stdin is not a terminal
+    # 2. Already elevated via sudo - GOSTMN_INSTALLER_RUNNING_AS_ROOT is set
+    echo "[→] Starting installation automatically..."
+    echo
+  fi
 
   local errors=0
 
