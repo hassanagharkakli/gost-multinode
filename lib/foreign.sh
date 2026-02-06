@@ -3,7 +3,11 @@ DIR="/opt/gost-multinode/config/foreign"
 add_foreign() {
   ensure_directories
 
-  echo "== Add foreign node configuration =="
+  echo
+  echo "=========================================="
+  echo "  Add Foreign Node Configuration"
+  echo "=========================================="
+  echo
 
   local name iran_ip iran_port user auth_mode pass key_file cfg
 
@@ -105,24 +109,61 @@ add_foreign() {
   done
 
   chmod 600 "${cfg}"
-  echo "[+] Foreign node configuration saved to ${cfg}"
-  echo "[i] Use the \"Start foreign nodes\" option to start or restart all defined foreign nodes."
+
+  echo
+  echo "[+] Foreign node configuration saved successfully!"
+  echo "    Configuration file: ${cfg}"
+  echo "    Node name: ${name}"
+  echo
+  echo "[i] Next step: Use option 5 to start all foreign node services."
   pause
 }
 
 start_foreign() {
   ensure_directories
-  echo "[+] Enabling and starting all foreign node instances ..."
+
+  echo
+  echo "=========================================="
+  echo "  Starting Foreign Node Services"
+  echo "=========================================="
+  echo
+
+  local f name count=0
+  shopt -s nullglob
+
+  # Check if any configs exist
+  if ! ls "${DIR}"/*.conf >/dev/null 2>&1; then
+    echo "[!] No foreign node configurations found."
+    echo "    Please add a foreign node configuration first (option 4)."
+    shopt -u nullglob
+    pause
+    return 1
+  fi
+
+  echo "[+] Reloading systemd daemon..."
   systemctl daemon-reload
 
-  local f name
-  shopt -s nullglob
+  echo "[+] Processing foreign node configurations..."
   for f in "${DIR}"/*.conf; do
     name=$(basename "$f" .conf)
-    systemctl enable "gost-foreign@${name}.service"
-    systemctl restart "gost-foreign@${name}.service"
+    echo "  - Enabling gost-foreign@${name}.service..."
+    systemctl enable "gost-foreign@${name}.service" 2>/dev/null || true
+    echo "  - Starting gost-foreign@${name}.service..."
+    if systemctl restart "gost-foreign@${name}.service"; then
+      ((count++))
+    else
+      echo "    [!] Failed to start gost-foreign@${name}.service"
+    fi
   done
   shopt -u nullglob
 
+  echo
+  if [[ $count -gt 0 ]]; then
+    echo "[+] Started ${count} foreign node service(s)."
+    echo "[i] Use option 6 to check service status."
+  else
+    echo "[!] No services were started successfully."
+    echo "[i] Check logs with: journalctl -u 'gost-foreign@*.service' -n 50"
+  fi
   pause
 }

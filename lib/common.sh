@@ -15,7 +15,8 @@ GOSTMN_CONFIG_DIR_FOREIGN="${GOSTMN_BASE_DIR}/config/foreign"
 GOSTMN_LOG_DIR="${GOSTMN_BASE_DIR}/logs"
 
 pause() {
-  read -rp "Press ENTER to continue..." _
+  echo
+  read -rp "Press ENTER to continue... " _
 }
 
 require_root() {
@@ -26,8 +27,14 @@ require_root() {
 }
 
 install_gost() {
-  echo "[+] Installing or updating Gost..."
+  echo
+  echo "=========================================="
+  echo "  Installing / Updating Gost Binary"
+  echo "=========================================="
+  echo
   bash <(curl -fsSL https://github.com/go-gost/gost/raw/master/install.sh) --install
+  echo
+  echo "[+] Gost installation completed."
   pause
 }
 
@@ -58,11 +65,27 @@ validate_ip_or_host() {
 }
 
 status() {
-  echo "== Iran node status =="
-  systemctl status gost-iran.service --no-pager || echo "gost-iran.service is not active."
   echo
-  echo "== Foreign nodes status =="
-  systemctl list-units 'gost-foreign@*.service' --no-pager || true
+  echo "=========================================="
+  echo "  Service Status Overview"
+  echo "=========================================="
+  echo
+  echo "--- Iran Node Status ---"
+  if systemctl is-active --quiet gost-iran.service 2>/dev/null; then
+    systemctl status gost-iran.service --no-pager -l || true
+  else
+    echo "[!] gost-iran.service is not active."
+  fi
+  echo
+  echo "--- Foreign Nodes Status ---"
+  local count
+  count=$(systemctl list-units 'gost-foreign@*.service' --no-pager --no-legend 2>/dev/null | wc -l)
+  if [[ $count -gt 0 ]]; then
+    systemctl list-units 'gost-foreign@*.service' --no-pager || true
+  else
+    echo "[i] No foreign node services are currently active."
+  fi
+  echo
   pause
 }
 
@@ -74,25 +97,41 @@ ensure_directories() {
 uninstall_gost_multinode() {
   require_root
 
-  echo "== gost-multinode uninstall =="
-  echo "This will stop services, disable them, and remove /opt/gost-multinode and the gost-manager symlink."
+  echo
+  echo "=========================================="
+  echo "  Uninstall gost-multinode"
+  echo "=========================================="
+  echo
+  echo "WARNING: This will:"
+  echo "  - Stop and disable all gost-multinode services"
+  echo "  - Remove /opt/gost-multinode directory"
+  echo "  - Remove /usr/bin/gost-manager symlink"
+  echo
+  echo "Note: The Gost binary itself will NOT be removed."
+  echo
   read -rp "Are you sure you want to continue? [y/N]: " confirm
   if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-    echo "Uninstall cancelled."
+    echo
+    echo "[i] Uninstall cancelled."
     pause
     return 0
-  }
+  fi
 
+  echo
+  echo "[+] Stopping services..."
   systemctl stop gost-iran.service 2>/dev/null || true
   systemctl stop 'gost-foreign@*.service' 2>/dev/null || true
 
+  echo "[+] Disabling services..."
   systemctl disable gost-iran.service 2>/dev/null || true
   systemctl disable 'gost-foreign@*.service' 2>/dev/null || true
 
+  echo "[+] Removing files..."
   rm -f /usr/bin/gost-manager
   rm -rf "${GOSTMN_BASE_DIR}"
 
-  echo "[+] gost-multinode has been removed."
+  echo
+  echo "[+] gost-multinode has been successfully removed."
   pause
 }
 

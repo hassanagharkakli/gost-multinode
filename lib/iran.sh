@@ -3,7 +3,11 @@ IRAN_CONF="/opt/gost-multinode/config/iran.conf"
 setup_iran() {
   ensure_directories
 
-  echo "== Configure Iran relay node =="
+  echo
+  echo "=========================================="
+  echo "  Configure Iran Relay Node"
+  echo "=========================================="
+  echo
 
   local port user auth_mode pass key_file allowlist
 
@@ -67,15 +71,52 @@ setup_iran() {
 
   chmod 600 "${IRAN_CONF}"
 
-  echo "[+] Iran relay configuration saved to ${IRAN_CONF}"
-  echo "[i] Remember to open the selected port on your firewall."
+  echo
+  echo "[+] Iran relay configuration saved successfully!"
+  echo "    Configuration file: ${IRAN_CONF}"
+  echo
+  echo "[i] Important: Make sure to open port ${port} on your firewall."
+  echo "[i] Next step: Use option 3 to start the Iran relay service."
   pause
 }
 
 start_iran() {
-  echo "[+] Enabling and starting gost-iran.service ..."
+  if [[ ! -f "${IRAN_CONF}" ]]; then
+    echo
+    echo "[!] Error: Iran relay configuration not found."
+    echo "    Please configure the Iran node first (option 2)."
+    pause
+    return 1
+  fi
+
+  echo
+  echo "=========================================="
+  echo "  Starting Iran Relay Service"
+  echo "=========================================="
+  echo
+
+  echo "[+] Reloading systemd daemon..."
   systemctl daemon-reload
+
+  echo "[+] Enabling gost-iran.service..."
   systemctl enable gost-iran.service
-  systemctl restart gost-iran.service
+
+  echo "[+] Starting gost-iran.service..."
+  if systemctl restart gost-iran.service; then
+    sleep 1
+    if systemctl is-active --quiet gost-iran.service; then
+      echo
+      echo "[+] Iran relay service started successfully!"
+      echo "[i] Use option 6 to check service status."
+    else
+      echo
+      echo "[!] Service started but may not be running correctly."
+      echo "[i] Check status with: systemctl status gost-iran.service"
+    fi
+  else
+    echo
+    echo "[!] Failed to start gost-iran.service"
+    echo "[i] Check logs with: journalctl -u gost-iran.service -n 50"
+  fi
   pause
 }
